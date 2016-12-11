@@ -2,23 +2,24 @@
 #include "pebble.h"
 
 static Window *s_window;
-static Layer *s_simple_bg_layer, *s_date_layer, *s_hands_layer;
+static Layer *s_simple_bg_layer, *s_date_layer, *s_hands_layer, *s_dot_layer;
 static TextLayer *s_day_label, *s_num_label;
-// Added for messaging text
-static TextLayer *s_text_label1, *s_text_label2;;
 
 static GPath *s_tick_paths[NUM_CLOCK_TICKS];
 static GPath *s_minute_arrow, *s_hour_arrow;
 static char s_num_buffer[4], s_day_buffer[6];
 
-// Start app messaging
-static AppSync s_sync;
-static uint8_t s_sync_buffer[64];
+// Weather
+static TextLayer *s_temperature_layer;
+static BitmapLayer *s_icon_layer;
+static GBitmap *s_icon_bitmap = NULL;
 
-enum DirectionKey {
-  DIRECTION_KEY = 0x0,      // TUPLE_INT
-  DEPTIME_KEY = 0x1,        // TUPLE_CSTRING
-};
+// Messaging
+static AppSync s_sync;
+static uint8_t s_sync_buffer[128];
+
+
+static int depTime1 = -1, depTime2 = -1;
 
 // Error Callback for messaging
 static void sync_error_callback(DictionaryResult dict_error, AppMessageResult app_message_error, void *context) {
@@ -29,8 +30,6 @@ static void sync_error_callback(DictionaryResult dict_error, AppMessageResult ap
 static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tuple, const Tuple* old_tuple, void* context) {
   
   static uint8_t direction = 0;
-  static char label1[] = "        ";
-  static char label2[] = "        ";
   
   switch (key) {
     case DIRECTION_KEY:
@@ -40,14 +39,27 @@ static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tup
       break;   
     case DEPTIME_KEY:
        //APP_LOG(APP_LOG_LEVEL_DEBUG, "Received time message <%s>", new_tuple->value->cstring);
-      if (strlen(new_tuple->value->cstring)>1) {
+      if (strlen(new_tuple->value->cstring)>=1) {
         if(direction==1) 
-          strcpy(label1, new_tuple->value->cstring);
+          depTime1 = atoi(new_tuple->value->cstring);
         if(direction==2) 
-          strcpy(label2, new_tuple->value->cstring);
+          depTime2 = atoi(new_tuple->value->cstring);
       }
-      text_layer_set_text(s_text_label1, label1);
-      text_layer_set_text(s_text_label2, label2);
+      break;
+    case WEATHER_ICON_KEY:
+      if (s_icon_bitmap) {
+        gbitmap_destroy(s_icon_bitmap);
+      }
+
+      //APP_LOG(APP_LOG_LEVEL_DEBUG, "Icon is <%d>", atoi(new_tuple->value->cstring));
+      s_icon_bitmap = gbitmap_create_with_resource(WEATHER_ICONS[atoi(new_tuple->value->cstring)-1]);
+      bitmap_layer_set_compositing_mode(s_icon_layer, GCompOpSet);
+      bitmap_layer_set_bitmap(s_icon_layer, s_icon_bitmap);
+      break;
+
+    case WEATHER_TEMPERATURE_KEY:
+      // App Sync keeps new_tuple in s_sync_buffer, so we may use it directly
+      text_layer_set_text(s_temperature_layer, new_tuple->value->cstring);
       break;
   }
 }
@@ -71,11 +83,13 @@ static void request_js(void) {
   app_message_outbox_send();  
 }
 
+
 // Runs as result of layer marked dirty
 static void bg_update_proc(Layer *layer, GContext *ctx) {
-  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, GColorLiberty);
   graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, GColorWhite);
+  // To add more tick lines would need to change offset and add more ticks
   for (int i = 0; i < NUM_CLOCK_TICKS; ++i) {
     const int x_offset = PBL_IF_ROUND_ELSE(18, 0);
     const int y_offset = PBL_IF_ROUND_ELSE(6, 0);
@@ -100,7 +114,7 @@ static void hands_update_proc(Layer *layer, GContext *ctx) {
   };
 
   // second hand
-  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_draw_line(ctx, second_hand, center);
 
   // minute/hour hand
@@ -116,9 +130,48 @@ static void hands_update_proc(Layer *layer, GContext *ctx) {
   gpath_draw_outline(ctx, s_hour_arrow);
 
   // dot in the middle
-  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, GColorDarkCandyAppleRed);
   graphics_fill_rect(ctx, GRect(bounds.size.w / 2 - 1, bounds.size.h / 2 - 1, 3, 3), 0, GCornerNone);
 }
+
+GPoint calc_point(int depTime, GRect bounds, GPoint center) {
+  time_t now = time(NULL);
+  now += depTime * 60;
+  struct tm *t = localtime(&now);
+  const int16_t dot_distance = PBL_IF_ROUND_ELSE((bounds.size.w / 2) - 19, bounds.size.w / 2 -5);
+  uint16_t dot_angle = TRIG_MAX_ANGLE * t->tm_min / 60;
+  GPoint point = {
+    .x = (int16_t)(sin_lookup(dot_angle) * (int32_t)dot_distance / TRIG_MAX_RATIO) + center.x,
+    .y = (int16_t)(-cos_lookup(dot_angle) * (int32_t)dot_distance / TRIG_MAX_RATIO) + center.y,
+  };
+  return point;
+}
+
+// Runs as result of layer marked dirty
+static void dot_update_proc(Layer *layer, GContext *ctx) {
+  GRect bounds = layer_get_bounds(layer);
+  GPoint center = grect_center_point(&bounds);    
+  uint16_t radius = 4;
+
+  // Point leaving from home
+  if (depTime1 >= 0) {
+    GPoint home_point = calc_point(depTime1, bounds, center);
+    graphics_context_set_stroke_color(ctx, GColorCyan);
+    graphics_context_set_fill_color(ctx, GColorCyan);
+    graphics_draw_circle(ctx, home_point, radius);
+    graphics_fill_circle(ctx, home_point, radius);
+  }
+  // Point leaving from work
+  if (depTime2 >= 0) {
+    GPoint away_point = calc_point(depTime2, bounds, center);
+    graphics_context_set_stroke_color(ctx, GColorRed);
+    graphics_context_set_fill_color(ctx, GColorRed);
+    graphics_draw_circle(ctx, away_point, radius);
+    graphics_fill_circle(ctx, away_point, radius);
+  }   
+ 
+}
+
 
 // Runs as result of layer marked dirty
 static void date_update_proc(Layer *layer, GContext *ctx) {
@@ -147,6 +200,8 @@ static void handle_second_tick(struct tm *tick_time, TimeUnits units_changed) {
 }
 
 
+
+
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
@@ -160,47 +215,54 @@ static void window_load(Window *window) {
   layer_add_child(window_layer, s_date_layer);
 
   s_day_label = text_layer_create(PBL_IF_ROUND_ELSE(
-    GRect(63, 114, 27, 20),
-    GRect(46, 114, 27, 20)));
+    GRect(30, 104, 60, 30),
+    GRect(30, 104, 60, 30)));
   text_layer_set_text(s_day_label, s_day_buffer);
-  text_layer_set_background_color(s_day_label, GColorBlack);
-  text_layer_set_text_color(s_day_label, GColorWhite);
-  text_layer_set_font(s_day_label, fonts_get_system_font(FONT_KEY_GOTHIC_18));
+  text_layer_set_background_color(s_day_label, GColorLiberty);
+  text_layer_set_text_color(s_day_label, GColorBlack);
+  text_layer_set_font(s_day_label, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(s_day_label, GTextAlignmentCenter);
 
   layer_add_child(s_date_layer, text_layer_get_layer(s_day_label));
 
   s_num_label = text_layer_create(PBL_IF_ROUND_ELSE(
-    GRect(90, 114, 18, 20),
-    GRect(73, 114, 18, 20)));
+    GRect(75, 104, 28, 30),
+    GRect(75, 104, 28, 30)));
   text_layer_set_text(s_num_label, s_num_buffer);
-  text_layer_set_background_color(s_num_label, GColorBlack);
-  text_layer_set_text_color(s_num_label, GColorWhite);
-  text_layer_set_font(s_num_label, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_background_color(s_num_label, GColorLiberty);
+  text_layer_set_text_color(s_num_label, GColorBlack);
+  text_layer_set_font(s_num_label, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(s_num_label, GTextAlignmentCenter);
 
   layer_add_child(s_date_layer, text_layer_get_layer(s_num_label));
 
   s_hands_layer = layer_create(bounds);
   layer_set_update_proc(s_hands_layer, hands_update_proc);
   layer_add_child(window_layer, s_hands_layer);
+  
+  s_dot_layer = layer_create(bounds);
+  layer_set_update_proc(s_dot_layer, dot_update_proc);
+  layer_add_child(window_layer, s_dot_layer);
     
-  // Load data for messaging
-  s_text_label1 = text_layer_create(GRect(0, 30, bounds.size.w, 32));
-  text_layer_set_text_color(s_text_label1, GColorWhite);
-  text_layer_set_background_color(s_text_label1, GColorClear);
-  text_layer_set_font(s_text_label1, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_text_label1, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_text_label1));
- 
-  s_text_label2 = text_layer_create(GRect(0, 50, bounds.size.w, 32));
-  text_layer_set_text_color(s_text_label2, GColorWhite);
-  text_layer_set_background_color(s_text_label2, GColorClear);
-  text_layer_set_font(s_text_label2, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_text_label2, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_text_label2));
-    
+  
+  // Weather
+  s_icon_layer = bitmap_layer_create(GRect(0, 10, bounds.size.w, 50));
+  layer_add_child(window_layer, bitmap_layer_get_layer(s_icon_layer));
+
+  s_temperature_layer = text_layer_create(GRect(0, 45, bounds.size.w, 32));
+  text_layer_set_text_color(s_temperature_layer, GColorBlack);
+  text_layer_set_background_color(s_temperature_layer, GColorClear);
+  text_layer_set_font(s_temperature_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(s_temperature_layer, GTextAlignmentCenter);
+  layer_add_child(window_layer, text_layer_get_layer(s_temperature_layer));
+
+  
+  // Messaging values
   Tuplet initial_values[] = {
     TupletInteger(DIRECTION_KEY, (uint8_t) 1),      
-    TupletCString(DEPTIME_KEY, "     "),          
+    TupletCString(DEPTIME_KEY, "     "), 
+    TupletInteger(WEATHER_ICON_KEY, (uint8_t) 1),
+    TupletCString(WEATHER_TEMPERATURE_KEY, "      "),
   };
 
   app_sync_init(&s_sync, s_sync_buffer, sizeof(s_sync_buffer),
@@ -217,16 +279,23 @@ static void window_unload(Window *window) {
 
   text_layer_destroy(s_day_label);
   text_layer_destroy(s_num_label);
-  text_layer_destroy(s_text_label1);
-  text_layer_destroy(s_text_label2);
 
   layer_destroy(s_hands_layer);
+  layer_destroy(s_dot_layer);
+  
+  // Weather
+    if (s_icon_bitmap) {
+    gbitmap_destroy(s_icon_bitmap);
+  }
+
+  text_layer_destroy(s_temperature_layer);
+  bitmap_layer_destroy(s_icon_layer);
 }
 
 
 static void init() {
   s_window = window_create();
-  
+    
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = window_load,
     .unload = window_unload,
@@ -247,6 +316,7 @@ static void init() {
   GPoint center = grect_center_point(&bounds);
   gpath_move_to(s_minute_arrow, center);
   gpath_move_to(s_hour_arrow, center);
+ 
 
   for (int i = 0; i < NUM_CLOCK_TICKS; ++i) {
     s_tick_paths[i] = gpath_create(&ANALOG_BG_POINTS[i]);
@@ -255,8 +325,7 @@ static void init() {
   // Timer to update
   tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
   
-  app_message_open(128, 128);
-  
+  app_message_open(128, 128); 
    
 }
 

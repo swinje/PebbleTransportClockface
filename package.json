@@ -4,18 +4,138 @@
     "keywords": [],
     "name": "transport-watch",
     "pebble": {
-        "capabilities": [
-            ""
-        ],
         "displayName": "Transport watch",
-        "enableMultiJS": false,
+        "enableMultiJS": true,
         "messageKeys": {
             "DEPTIME_KEY": 1,
-            "DIRECTION_KEY": 0
+            "DIRECTION_KEY": 0,
+            "WEATHER_ICON_KEY": 2,
+            "WEATHER_TEMPERATURE_KEY": 3
         },
         "projectType": "native",
         "resources": {
-            "media": []
+            "media": [
+                {
+                    "file": "images/met20.png",
+                    "name": "IMAGE_MET20",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met15.png",
+                    "name": "IMAGE_MET15",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met14.png",
+                    "name": "IMAGE_MET14",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met13.png",
+                    "name": "IMAGE_MET13",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met12.png",
+                    "name": "IMAGE_MET12",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met11.png",
+                    "name": "IMAGE_MET11",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met10.png",
+                    "name": "IMAGE_MET10",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met9.png",
+                    "name": "IMAGE_MET9",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met8.png",
+                    "name": "IMAGE_MET8",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met7.png",
+                    "name": "IMAGE_MET7",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met6.png",
+                    "name": "IMAGE_MET6",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met5.png",
+                    "name": "IMAGE_MET5",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met4.png",
+                    "name": "IMAGE_MET4",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met3.png",
+                    "name": "IMAGE_MET3",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met2.png",
+                    "name": "IMAGE_MET2",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/met1.png",
+                    "name": "IMAGE_MET1",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/sun.png",
+                    "name": "IMAGE_SUN",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/snow.png",
+                    "name": "IMAGE_SNOW",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/rain.png",
+                    "name": "IMAGE_RAIN",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/cloud.png",
+                    "name": "IMAGE_CLOUD",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                }
+            ]
         },
         "sdkVersion": "3",
         "targetPlatforms": [
