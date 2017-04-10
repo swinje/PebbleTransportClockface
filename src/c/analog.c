@@ -1,5 +1,6 @@
-#include "clock.h"
 #include "pebble.h"
+#include "analog.h"
+#include "message.h"
 
 static Window *s_window;
 static Layer *s_simple_bg_layer, *s_date_layer, *s_hands_layer, *s_dot_layer;
@@ -14,73 +15,30 @@ static TextLayer *s_temperature_layer;
 static BitmapLayer *s_icon_layer;
 static GBitmap *s_icon_bitmap = NULL;
 
-// Messaging
-static AppSync s_sync;
-static uint8_t s_sync_buffer[128];
 
 
 static int depTime1 = -1, depTime2 = -1;
 
-// Error Callback for messaging
-static void sync_error_callback(DictionaryResult dict_error, AppMessageResult app_message_error, void *context) {
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "App Message Sync Error: %d", app_message_error);
-}
-
-// Callback for messaging
-static void sync_tuple_changed_callback(const uint32_t key, const Tuple* new_tuple, const Tuple* old_tuple, void* context) {
-  
-  static uint8_t direction = 0;
-  
-  switch (key) {
-    case DIRECTION_KEY:
-      // App Sync keeps new_tuple in s_sync_buffer, so we may use it directly
-      direction= new_tuple->value->uint8;
-      //APP_LOG(APP_LOG_LEVEL_DEBUG, "Received direction message %i", direction);
-      break;   
-    case DEPTIME_KEY:
-       //APP_LOG(APP_LOG_LEVEL_DEBUG, "Received time message <%s>", new_tuple->value->cstring);
-      if (strlen(new_tuple->value->cstring)>=1) {
-        if(direction==1) 
-          depTime1 = atoi(new_tuple->value->cstring);
-        if(direction==2) 
-          depTime2 = atoi(new_tuple->value->cstring);
-      }
-      break;
-    case WEATHER_ICON_KEY:
-      if (s_icon_bitmap) {
+void switch_analog_icon(int icon_index) {
+ if (s_icon_bitmap) {
         gbitmap_destroy(s_icon_bitmap);
       }
 
       //APP_LOG(APP_LOG_LEVEL_DEBUG, "Icon is <%d>", atoi(new_tuple->value->cstring));
-      s_icon_bitmap = gbitmap_create_with_resource(WEATHER_ICONS[atoi(new_tuple->value->cstring)-1]);
+      s_icon_bitmap = gbitmap_create_with_resource(WEATHER_ICONS[icon_index-1]);
       bitmap_layer_set_compositing_mode(s_icon_layer, GCompOpSet);
       bitmap_layer_set_bitmap(s_icon_layer, s_icon_bitmap);
-      break;
-
-    case WEATHER_TEMPERATURE_KEY:
-      // App Sync keeps new_tuple in s_sync_buffer, so we may use it directly
-      text_layer_set_text(s_temperature_layer, new_tuple->value->cstring);
-      break;
-  }
 }
 
-// Send message to JS
-static void request_js(void) {
-  DictionaryIterator *iter;
-  AppMessageResult ar = app_message_outbox_begin(&iter);
+void set_analog_temp(const char *tmpstr) {
+  text_layer_set_text(s_temperature_layer, tmpstr);
+}
 
-  if (!iter) {
-    APP_LOG(APP_LOG_LEVEL_DEBUG, "failed sending message %i", ar);
-    // Error creating outbound message
-    return;
-  }
-
-  // Write in values to send
-  int value = 1;
-  dict_write_int(iter, 1, &value, sizeof(int), true);
-  dict_write_end(iter);
-
-  app_message_outbox_send();  
+void set_analog_deptime(int dir, int tm) {
+  if (dir ==1)
+    depTime1 = tm;
+  else
+    depTime2 = tm;
 }
 
 
@@ -134,7 +92,7 @@ static void hands_update_proc(Layer *layer, GContext *ctx) {
   graphics_fill_rect(ctx, GRect(bounds.size.w / 2 - 1, bounds.size.h / 2 - 1, 3, 3), 0, GCornerNone);
 }
 
-GPoint calc_point(int depTime, GRect bounds, GPoint center) {
+static GPoint calc_point(int depTime, GRect bounds, GPoint center) {
   time_t now = time(NULL);
   now += depTime * 60;
   struct tm *t = localtime(&now);
@@ -172,7 +130,6 @@ static void dot_update_proc(Layer *layer, GContext *ctx) {
  
 }
 
-
 // Runs as result of layer marked dirty
 static void date_update_proc(Layer *layer, GContext *ctx) {
   time_t now = time(NULL);
@@ -183,7 +140,6 @@ static void date_update_proc(Layer *layer, GContext *ctx) {
 
   strftime(s_num_buffer, sizeof(s_num_buffer), "%d", t);
   text_layer_set_text(s_num_label, s_num_buffer);
-  
 }
 
 // Runs as result of layer marked dirty
@@ -198,9 +154,6 @@ static void handle_second_tick(struct tm *tick_time, TimeUnits units_changed) {
   // Tells the window to redraw itself and therefore fires all the update procs
   layer_mark_dirty(window_get_root_layer(s_window));
 }
-
-
-
 
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
@@ -256,21 +209,6 @@ static void window_load(Window *window) {
   text_layer_set_text_alignment(s_temperature_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(s_temperature_layer));
 
-  
-  // Messaging values
-  Tuplet initial_values[] = {
-    TupletInteger(DIRECTION_KEY, (uint8_t) 1),      
-    TupletCString(DEPTIME_KEY, "     "), 
-    TupletInteger(WEATHER_ICON_KEY, (uint8_t) 1),
-    TupletCString(WEATHER_TEMPERATURE_KEY, "      "),
-  };
-
-  app_sync_init(&s_sync, s_sync_buffer, sizeof(s_sync_buffer),
-      initial_values, ARRAY_LENGTH(initial_values),
-      sync_tuple_changed_callback, sync_error_callback, NULL);
-
-  // End messaging
-
 }
 
 static void window_unload(Window *window) {
@@ -293,7 +231,8 @@ static void window_unload(Window *window) {
 }
 
 
-static void init() {
+void analog_init() {
+  
   s_window = window_create();
     
   window_set_window_handlers(s_window, (WindowHandlers) {
@@ -317,19 +256,16 @@ static void init() {
   gpath_move_to(s_minute_arrow, center);
   gpath_move_to(s_hour_arrow, center);
  
-
   for (int i = 0; i < NUM_CLOCK_TICKS; ++i) {
     s_tick_paths[i] = gpath_create(&ANALOG_BG_POINTS[i]);
   }
   
   // Timer to update
   tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
-  
-  app_message_open(128, 128); 
    
 }
 
-static void deinit() {
+void analog_deinit() {
   gpath_destroy(s_minute_arrow);
   gpath_destroy(s_hour_arrow);
 
@@ -340,13 +276,6 @@ static void deinit() {
   tick_timer_service_unsubscribe();
   window_destroy(s_window);
   
-  // End messaging
-  app_sync_deinit(&s_sync);
-
 }
 
-int main() {
-  init();
-  app_event_loop();
-  deinit();
-}
+

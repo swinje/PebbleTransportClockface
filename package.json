@@ -1,20 +1,36 @@
 {
     "author": "Svein W",
-    "dependencies": {},
+    "dependencies": {
+        "pebble-clay": "^1.0.0"
+    },
     "keywords": [],
-    "name": "transport-watch",
+    "name": "commuter-watch",
     "pebble": {
-        "displayName": "Transport watch",
+        "capabilities": [
+            "configurable"
+        ],
+        "displayName": "Commuter watch",
         "enableMultiJS": true,
         "messageKeys": {
+            "BLUEFROM": 4,
+            "BLUETO": 5,
             "DEPTIME_KEY": 1,
+            "DIGITAL": 8,
             "DIRECTION_KEY": 0,
+            "REDFROM": 6,
+            "REDTO": 7,
             "WEATHER_ICON_KEY": 2,
             "WEATHER_TEMPERATURE_KEY": 3
         },
         "projectType": "native",
         "resources": {
             "media": [
+                {
+                    "file": "fonts/FerroRosso.ttf",
+                    "name": "FERRO_ROSSO_48",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
                 {
                     "file": "images/met20.png",
                     "name": "IMAGE_MET20",

@@ -2,6 +2,12 @@
 
 #include "pebble.h"
 
+void switch_analog_icon(int icon_index);
+void set_analog_temp(const char *tmpstr);
+void set_analog_deptime(int dir, int tm);
+void analog_init();
+void analog_deinit();
+
 #define NUM_CLOCK_TICKS 13
 
 static const struct GPathInfo ANALOG_BG_POINTS[] = {
@@ -127,28 +133,6 @@ static const GPathInfo HOUR_HAND_POINTS = {
   }
 };
 
-static const uint32_t WEATHER_ICONS[] = {
-  RESOURCE_ID_IMAGE_MET1,
-  RESOURCE_ID_IMAGE_MET2, 
-  RESOURCE_ID_IMAGE_MET3, 
-  RESOURCE_ID_IMAGE_MET4,
-  RESOURCE_ID_IMAGE_MET5,
-  RESOURCE_ID_IMAGE_MET6, 
-  RESOURCE_ID_IMAGE_MET7,
-  RESOURCE_ID_IMAGE_MET8,
-  RESOURCE_ID_IMAGE_MET9, 
-  RESOURCE_ID_IMAGE_MET10, 
-  RESOURCE_ID_IMAGE_MET11,
-  RESOURCE_ID_IMAGE_MET12,
-  RESOURCE_ID_IMAGE_MET13, 
-  RESOURCE_ID_IMAGE_MET14,
-  RESOURCE_ID_IMAGE_MET15,
-  RESOURCE_ID_IMAGE_MET20
-};
 
-enum MessageKey {
-  DIRECTION_KEY = 0x0,      // TUPLE_INT
-  DEPTIME_KEY = 0x1,        // TUPLE_CSTRING
-  WEATHER_ICON_KEY = 0x2,         // TUPLE_INT
-  WEATHER_TEMPERATURE_KEY = 0x3,  // TUPLE_CSTRING
-};
+
+

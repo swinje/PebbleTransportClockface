@@ -2,10 +2,42 @@
 
 //var utm = require('./utm');
 
+var Clay = require('pebble-clay');
+var clayConfig = require('./config');
+var clay = new Clay(clayConfig);
+var messageKeys = require('message_keys');
+
+var redTo='3012430', redFrom='3010011', blueTo='3010011', blueFrom='3012430';
+
 var locationOptions = {
   'timeout': 15000,
   'maximumAge': 60000
 };
+
+// Config window closed
+Pebble.addEventListener('webviewclosed', function(e) {
+  if (e && !e.response) {
+    return;
+  }
+
+  // Get the keys and values from each config item
+  var dict = clay.getSettings(e.response);
+  blueTo = dict[messageKeys.BLUETO];
+  blueFrom = dict[messageKeys.BLUEFROM];
+  redTo = dict[messageKeys.REDTO];
+  redFrom = dict[messageKeys.REDFROM];
+  
+  //console.log("Changed blueTo " + blueTo + " blueFrom " + blueFrom);
+  //console.log("Changed redTo " + redTo + " redFrom " + redFrom);
+
+  // Send settings values to watch side
+  Pebble.sendAppMessage(dict, function(e) {
+    console.log('Sent config data to Pebble');
+  }, function(e) {
+    console.log('Failed to send config data!');
+    console.log(JSON.stringify(e));
+  });
+});
 
 
 // At startup
@@ -16,6 +48,8 @@ Pebble.addEventListener('ready', function (e) {
   //console.log(e.type);
 });
 
+
+
 // When called
 Pebble.addEventListener('appmessage', function (e) {
   //console.log('message!');
@@ -24,8 +58,10 @@ Pebble.addEventListener('appmessage', function (e) {
   //console.log(e.type);
   //console.log(JSON.stringify(e.payload));
   //console.log(e.payload['1']);
-  fetchDeparture('3012430', '3010011', 'Hov',1);
-  fetchDeparture('3010011', '3012430', 'JBT',2);
+  //console.log("Fetching blueTo " + blueTo + " blueFrom " + blueFrom);
+  //console.log("Fetching redTo " + redTo + " redFrom " + redFrom);
+  fetchDeparture(blueFrom, blueTo, 'Blue',1);
+  fetchDeparture(redFrom, redTo, 'Red',2);
 });
 
 // When closing
@@ -193,6 +229,8 @@ function locationError(err) {
     'WEATHER_TEMPERATURE_KEY': 'N/A'
   });
 }
+
+
 
 
 
